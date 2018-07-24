@@ -3,21 +3,10 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const request = require('request');
 const mongoose = require('mongoose');
-
+const passport = require('passport');
 
 const app = express();
 const port = process.env.PORT || 5000;
-
-mongoose.connect('mongodb://MikeDMontana:Mi55oula123@ds225010.mlab.com:25010/foodies-plan-it-v2');
-
-// define all Mongoose models
-var UserSchema = require('./models/user');
-var PartySchema = require( './models/user');
-var MealSchema = require('./models/user');
-const User = UserSchema.User;
-const Party = UserSchema.Party;
-const Meal = PartySchema.Meal;
-const Recipe = MealSchema.Recipe;
 
 // configure app to use BodyParser()
 // this will let us get the data from a POST
@@ -41,10 +30,15 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// API calls
-// app.get('/api/hello', (req, res) => {
-//   res.send({ express: 'Hello From Express' });
-// });
+app.use(passport.initialize());
+
+const localSignupStrategy = require('./server/passport/local-signup');
+const localLoginStrategy = require('./server/passport/local-login');
+passport.use('local-signup', localSignupStrategy);
+passport.use('local-login', localLoginStrategy);
+
+const authCheckMiddleware = require('./server/middleware/auth-check');
+app.use('/access', authCheckMiddleware);
 
 const router = express.Router();
 
@@ -54,182 +48,11 @@ router.use(function(req, res, next) {
   next();  // this line allows us to move onto next route and not stop here
 });
 
-// test route to make sure it is working
 //  accessed at GET http://localhost:8080/API
 router.get('/welcome', (req, res) => {
   res.send({ express: 'hooray! welcome to our api!' });
 });
 
-//*********************BEGIN Routes for Parties***********************
-router.route('/parties')
-
-//==============create a new party at POST http://localhost:8080/api/parties
-  .post(function(req, res) {
-    let party = new Party({
-      title: req.body.title,
-      description: req.body.description,
-      date: req.body.date,
-      users: req.body.users
-    });
-
-    // save the party and check for errors
-    party.save(function(err) {
-      if (err)
-        res.send(err);
-
-        res.json({ message: 'party created!' });
-    });
-  })
-
-//====================GET all parties at http://localhost:8080/api/parties
-  .get(function(req, res) {
-    Party.find(function(err, parties) {
-      if (err)
-      res.send(err);
-
-      res.json(parties);
-    });
-  });  // route (api/parties) closed
-
-//===================GET specific party http://localhost:8080/api/parties/:party_id
-router.route('/parties/:party_id')
-
-    .get(function(req, res) {
-      Party.findById(req.params.party_id, function(err, party) {
-        if (err)
-          res.send(err);
-
-          res.json(party);
-      });
-    })
-
-    //=========================UPDATE specific party http://localhost:8080/api/parties/:party_id
-    .put(function(req, res) {
-
-      //use our party model find the party we want
-      Party.findById(req.params.party_id, function(err, party) {
-        if (err)
-          res.send(err);
-
-          let meal = new Meal({
-            title: req.body.title,
-            description: req.body.description
-          });
-
-          party.meals.push(meal);
-
-          party.save(function(err) {
-            if (err)
-              res.send(err);
-
-              res.json(party.meals);
-          });
-        });
-      })
-
-      //===============DELETE specific party http://localhost:8080/api/parties/:party_id
-      .delete(function(req, res) {
-        party.remove({
-          _id: req.params.party_id
-        }, function(err, user) {
-          if (err)
-            res.send(err);
-
-            res.json({ message: 'Successfully deleted' });
-        });
-      });
-
-      //===============================GET specific meal within party http://localhost:8080/api/parties/:party_id/meals/:meal_id
-      router.route('/parties/:party_id/meals/:meal_id')
-
-        .get(function(req, res) {
-          Party.findById(req.params.party_id, function(err, party) {
-            if (err)
-              res.send(err);
-
-              res.json(party.meals.id(req.params.meal_id));
-          });
-        })
-
-        //=============================UPDATE specific meal at http://localhost:8080/api/parties/:party_id/meals/:meal_id
-        //=============================a new recipe object is defined through user input and pushed to meal
-        .put(function(req, res) {
-
-          // use our party model to find the party we want
-          Party.findById(req.params.party_id, function(err, party) {
-            if (err)
-              res.send(err);
-
-              let recipe = new Recipe({
-                name: req.body.name,
-                directions: req.body.directions,
-                ingredients: req.body.ingredients,
-                upvotes: req.body.upvotes,
-                downvotes: req.body.downvotes,
-                dishType: req.body.dishType
-              });
-
-              party.meals.id(req.params.meal_id).recipes.push(recipe);
-              party.save(function(err) {
-                if (err)
-                  res.send(err);
-
-                  res.json({ message: 'party updated!' });
-              });
-            });
-          });
-
-          //===========================GET all recipes within meal at http://localhost:8080/api/parties/:party_id/meals/:meal_id/recipes
-          router.route('/parties/:party_id/meals/:meal_id/recipes/:recipe_id')
-            .get(function(req, res) {
-              Party.findById(req.params.party_id, function(err, party) {
-                if (err)
-                  res.send(err);
-
-                  res.json(party.meals.id(req.params.meal_id).recipes);
-              });
-            });
-
-            //=========================GET specific recipe within meal at http://localhost:8080/api/parties/:party_id/meals/:meal_id/recipes/:recipe_id
-            router.route('/parties/:party_id/meals/:meal_id/recipes/:recipe_id')
-              .get(function(req, res) {
-                Party.findById(req.params.party_id, function(err, party) {
-                  if (err)
-                    res.send(err);
-
-                    res.json(party.meals.id(req.params.meal_id).recipes.id(req.params.recipe_id));
-                });
-              })
-
-              //=========================update recipe votes up or down at http://localhost:8080/api/parties/:party_id/meals/:meal_id/recipes/:recipe_id
-                .put(function(req, res) {
-                  Party.findById(req.params.party_id, function(err, party) {
-                    if (err)
-                      res.send(err)
-
-                      party.meals.id(req.params.meal_id).recipes.id(req.params.recipe_id).upvotes += parseInt(req.body.upvotes);
-                      party.meals.id(req.params.meal_id).recipes.id(req.params.recipe_id).downvotes += parseInt(req.body.downvotes);
-
-                      party.save(function(err) {
-                        if (err)
-                          res.send(err);
-
-                          res.json({ message: 'party updated!' });
-                      });
-                    });
-                  });
-
-//********************NEW ROUTE FOR USERs**************************
-router.route('/users')
-
-  .get(function(req, res) {
-    User.find(function(err, users) {
-      if (err)
-        res.send(err);
-
-        res.json(users);
-    });
-  });
 
 //***********************NEW ROUTE FOR EXTERNAL API**************************
 router.route('/recipes/:recipeSearch')
@@ -241,7 +64,10 @@ router.route('/recipes/:recipeSearch')
 
 // Register Our Routes ------------------
 // all of our routes will be prefixed with /api
+const apiRoutes = require('./server/routes/api');
+
 app.use('/api', router);
+app.use('/access', apiRoutes);
 
 
 
